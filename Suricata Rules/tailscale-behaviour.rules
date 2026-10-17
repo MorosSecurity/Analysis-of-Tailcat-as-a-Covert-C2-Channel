@@ -1,0 +1,28 @@
+# Tailscale behavioral detections for Suricata
+#
+# names, or other deployment-specific IOCs. Replace the example SID range if
+# it conflicts with your local rule allocation.
+
+# Made by: Moros Security, 2026
+# URL: https://moros.dev/
+
+# Remember clients that identify themselves as tailnodes in valid STUN binding
+# requests. It both establishes correlation state and generates an alert.
+alert udp $HOME_NET any -> $EXTERNAL_NET 3478 (msg:"LOCAL TAILSCALE tailnode STUN request observed"; flow:to_server; content:"|00 01|"; offset:0; depth:2; content:"|21 12 A4 42|"; offset:4; depth:4; content:"tailnode"; nocase; xbits:set,tailnet_tailnode,track ip_src,expire 600; sid:9901001; rev:2;)
+
+# Remember a STUN responder only when it answers a recently observed tailnode.
+# This creates the server-side state used by the DERP-candidate correlation.
+alert udp $EXTERNAL_NET 3478 -> $HOME_NET any (msg:"LOCAL TAILSCALE STUN responder observed"; flow:to_client; content:"|01 01|"; offset:0; depth:2; content:"|21 12 A4 42|"; offset:4; depth:4; xbits:isset,tailnet_tailnode,track ip_dst; xbits:set,tailnet_stun_server,track ip_src,expire 600; sid:9901002; rev:2;)
+
+# A tailnode connecting by TLS to an address that just answered its STUN
+# traffic is a behavioral DERP candidate. This does not rely on SNI or server IP.
+alert tls $HOME_NET any -> $EXTERNAL_NET 443 (msg:"LOCAL TAILSCALE probable DERP TLS connection after STUN"; flow:established,to_server; content:"|16 03|"; offset:0; depth:2; content:"|01|"; offset:5; depth:1; xbits:isset,tailnet_tailnode,track ip_src; xbits:isset,tailnet_stun_server,track ip_dst; classtype:network-service; threshold:type limit,track by_src,count 1,seconds 300; sid:9901003; rev:2;)
+
+# Tailscale's encrypted peer-discovery packets begin with the TS + speech
+# balloon marker: 54 53 f0 9f 92 ac ("TS💬"). This marker is protocol behavior,
+# not a deployment-specific IOC. Set a flowbit for the WireGuard correlation.
+alert udp $HOME_NET any -> any any (msg:"LOCAL TAILSCALE peer discovery TS-disc packet"; content:"|54 53 F0 9F 92 AC|"; offset:0; depth:6; flowbits:set,tailnet_disco_flow; classtype:network-service; threshold:type limit,track by_src,count 1,seconds 60; sid:9901004; rev:1;)
+
+# WireGuard message types are 1-4 encoded as a little-endian 32-bit value.
+# Alert only when such a packet follows TS-disc traffic on the same UDP flow.
+alert udp any any -> any any (msg:"LOCAL TAILSCALE direct WireGuard traffic after TS-disc"; flowbits:isset,tailnet_disco_flow; pcre:"/^[\x01-\x04]\x00\x00\x00/s"; classtype:network-service; threshold:type limit,track by_rule,count 1,seconds 60; sid:9901005; rev:2;)

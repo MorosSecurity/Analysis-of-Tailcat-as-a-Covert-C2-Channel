@@ -1,0 +1,55 @@
+services:
+  derper:
+    build:
+      context: .
+      args:
+        TAILSCALE_VERSION: v1.102.5
+    container_name: local-derper
+    restart: unless-stopped
+    command:
+      - -a=:443
+      - -http-port=-1
+      - -hostname=192.168.1.100
+      - -certmode=manual
+      - -certdir=/var/lib/derper/certs
+      - -c=/var/lib/derper/derper.key
+      - -stun=true
+      - -stun-port=3478
+    ports:
+      - "0.0.0.0:443:443/tcp"
+      - "0.0.0.0:3478:3478/udp"
+    volumes:
+      - derper-data:/var/lib/derper
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--no-check-certificate", "--spider", "https://127.0.0.1/generate_204"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  derpmap:
+    image: nginx:1.27.2-alpine
+    container_name: local-derp-map
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:8080:80/tcp"
+    volumes:
+      - ./derpmap.json:/usr/share/nginx/html/derpmap.json:ro
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/derpmap.json"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  derper-data:

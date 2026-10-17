@@ -1,0 +1,21 @@
+{
+  "OmitDefaultRegions": true,
+  "Regions": {
+    "900": {
+      "RegionID": 900,
+      "RegionCode": "local",
+      "RegionName": "Local Network",
+      "Nodes": [
+        {
+          "Name": "900a",
+          "RegionID": 900,
+          "HostName": "192.168.1.100",
+          "IPv4": "192.168.1.100",
+          "DERPPort": 443,
+          "STUNPort": 3478,
+          "CertName": "sha256-raw:b7af4a29d254dd8c39ba3121c04688cb84cbf8bc73c92bca6a63ee282f2090ae"
+        }
+      ]
+    }
+  }
+}
